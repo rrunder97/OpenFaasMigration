@@ -4,9 +4,8 @@ This repository runs an async-first AWS job pipeline for long-running work. Requ
 
 ## Primary Docs (Use These First)
 
-- `docs/Engineer Guide.md`: command-first build, deploy, rollout, smoke test, and GitHub round-trip flow
+- `docs/Engineer Guide.md`: **primary deployment runbook** (recommended path for setup, deploy, verify, and GitHub round-trip)
 - `docs/EngineeringHandoff.md`: day-2 ownership, rollback playbooks, and operational triage
-- `docs/Day1Onboarding.md`: first-day setup and orientation
 - `docs/SecretsProcess.md`: secrets lifecycle and ownership
 - `docs/ECS-IAM-and-Secrets.md`: IAM role and secret injection details
 - `docs/AWSAsyncArchitectureDetailed.md` and `docs/AWSServiceFlowHighLevel.md`: architecture visuals
@@ -74,7 +73,7 @@ End-to-end processing:
 
 ## 4) Quick Deployment Steps (Reference Full Guides)
 
-Use this as the short path, then follow the detailed commands in `docs/Engineer Guide.md` and operational context in `docs/EngineeringHandoff.md`.
+Use this as the short path, then follow `docs/Engineer Guide.md` as the source of truth for exact commands. Use `docs/EngineeringHandoff.md` for day-2 operations and rollback procedures.
 
 1. Prepare `terraform/backend.hcl` and `terraform/terraform.tfvars` from examples.
 2. Run Terraform bootstrap/apply for base infrastructure (`terraform init`, `plan`, `apply`).

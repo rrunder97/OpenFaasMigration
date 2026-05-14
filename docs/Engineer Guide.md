@@ -6,6 +6,21 @@ This guide is a practical, command-first runbook for taking this project from lo
 
 This platform is an async job-processing pipeline. The API is intentionally lightweight and returns quickly after enqueueing work, while background workers process jobs independently. This design avoids HTTP timeout pressure for long-running tasks and gives better reliability through retries, DLQ handling, and worker autoscaling.
 
+## Read this guide in order (quick map)
+
+Use this sequence to avoid deployment mistakes:
+
+1. Complete prerequisites and AWS auth (`Section 1`).
+2. Validate local app/tests (`Section 2` to `Section 4`).
+3. Configure Terraform backend and vars (`Section 5`).
+4. Run first Terraform apply to create base infra (`Section 6`).
+5. Build/push worker image to ECR (`Section 7`).
+6. Roll out image tag and worker count (`Section 8`).
+7. Run API smoke tests and AWS health checks (`Section 9` and `Section 10`).
+8. Complete release checklist and second-Mac round-trip check (`Section 11` and `Section 11.1`).
+
+If you are onboarding operational ownership after deployment, continue with `docs/EngineeringHandoff.md`.
+
 At a glance, Terraform deploys:
 
 - API entrypoint: `API Gateway` with `POST /jobs`
