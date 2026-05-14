@@ -4,7 +4,7 @@ This repository runs an async-first AWS job pipeline for long-running work. Requ
 
 ## Primary Docs (Use These First)
 
-- `docs/Engineer Guide.md`: **primary deployment runbook** (recommended path for setup, deploy, verify, and GitHub round-trip)
+- `docs/Engineer Guide.md`: **primary AWS deployment runbook** (recommended path for setup, deploy, and verification)
 - `docs/EngineeringHandoff.md`: day-2 ownership, rollback playbooks, and operational triage
 - `docs/SecretsProcess.md`: secrets lifecycle and ownership
 - `docs/ECS-IAM-and-Secrets.md`: IAM role and secret injection details

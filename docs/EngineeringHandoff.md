@@ -39,6 +39,52 @@ Helpful references:
 - `docs/SecretsProcess.md`
 - `docs/ECS-IAM-and-Secrets.md`
 
+## 1.1) Architecture, Payload, and Invocation Reference
+
+Use this section for system understanding that is intentionally out of scope for the deployment-only engineer runbook.
+
+### High-level runtime flow
+
+1. Client sends `POST /jobs` to API Gateway.
+2. API Gateway enqueues the JSON request body to SQS.
+3. ECS/Fargate worker (`sqs_worker.py`) long-polls SQS.
+4. Worker invokes shared handler flow and updates DynamoDB job status.
+5. CloudWatch logs/alarms and autoscaling policies support operations.
+
+### Payload contract
+
+Current application validation enforces:
+
+- `customer` is required and non-empty
+- `Org_Ids` is required
+- `Org_Ids` must contain exactly one ID
+
+Valid payload:
+
+```json
+{"customer":"acme","Org_Ids":[101]}
+```
+
+Invalid payload:
+
+```json
+{"customer":"acme","Org_Ids":[101,102]}
+```
+
+### Invocation and processing paths
+
+- HTTP/raw entrypoint (local/manual compatibility): `handler.handle(req: str)`
+- Queue worker entrypoint (production): `sqs_worker.run()`
+- Shared processing path: `handler.process_event(event, request_id=None)` -> `handler.function_handler(event, context)`
+
+Queue path in production:
+
+1. Message arrives in SQS (from API Gateway or direct send).
+2. Worker reads message and extracts payload/job ID.
+3. Worker calls shared processing flow.
+4. Worker writes status transitions in DynamoDB (`PENDING` -> `RUNNING` -> `SUCCEEDED`/`FAILED`).
+5. Worker deletes message on success; failed processing retries/DLQ per queue policy.
+
 ## 2) Deployment Steps
 
 Use this sequence for new environments and regular releases.
@@ -116,7 +162,7 @@ This updates the ECS task definition image and deploys the worker service.
 
 ## 3) Testing and Validation
 
-Current repo state: there is no full automated test suite yet. `tox.ini` is a placeholder that only validates environment setup.
+Current repo state: there is a focused payload/worker contract test suite (`tests/test_payload_contract.py`) and a minimal `tox` wrapper that runs `pytest -q`.
 
 ## Minimal local checks
 
@@ -129,7 +175,7 @@ pip install -r requirements.txt
 tox
 ```
 
-Expected `tox` behavior today: prints placeholder output. Treat this as a smoke check, not a correctness test.
+Expected `tox` behavior: runs the payload/worker contract tests. Treat this as baseline coverage; add additional unit/integration coverage for new feature work.
 
 ## Post-deploy functional verification
 
