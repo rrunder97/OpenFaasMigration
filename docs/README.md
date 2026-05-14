@@ -1,95 +1,97 @@
 # OpenFaaS to ECS/Fargate Migration Overview
 
-This project now uses a direct async architecture designed for long-running jobs.
+This repository runs an async-first AWS job pipeline for long-running work. Requests are accepted quickly at the API edge, queued durably in SQS, and processed by ECS/Fargate workers independent of HTTP request lifetime. This design reduces timeout risk, improves resilience with retries + DLQ, and gives controlled scaling with queue-driven autoscaling.
 
-For first-day setup and first deploy steps, see `docs/Day1Onboarding.md`.
-For a command-by-command junior engineer handoff (local -> AWS deploy -> test), see `docs/JuniorEngineerContainerizeDeployTestGuide.md`.
-For operational ownership and runbook guidance, see `docs/EngineeringHandoff.md`.
-For config and secrets ownership details, see `docs/SecretsProcess.md`.
-For ECS IAM role and secret-injection onboarding, see `docs/ECS-IAM-and-Secrets.md`.
-For architecture diagrams and presentation assets, see:
+## Primary Docs (Use These First)
 
-- `docs/AWSAsyncArchitectureDetailed.md`
-- `docs/AWSServiceFlowHighLevel.md`
+- `docs/Engineer Guide.md`: command-first build, deploy, rollout, smoke test, and GitHub round-trip flow
+- `docs/EngineeringHandoff.md`: day-2 ownership, rollback playbooks, and operational triage
+- `docs/Day1Onboarding.md`: first-day setup and orientation
+- `docs/SecretsProcess.md`: secrets lifecycle and ownership
+- `docs/ECS-IAM-and-Secrets.md`: IAM role and secret injection details
+- `docs/AWSAsyncArchitectureDetailed.md` and `docs/AWSServiceFlowHighLevel.md`: architecture visuals
 
-## 1) Current Target Architecture
+## 1) Architecture at a Glance
 
-1. Caller sends `POST /jobs` with JSON payload.
-2. API Gateway writes the payload directly to SQS.
-3. ECS/Fargate worker service polls the queue.
-4. Worker executes business logic in `handler.py`.
-5. Worker writes status updates to DynamoDB.
-6. CloudWatch captures worker logs and queue alarms monitor backlog/DLQ.
+1. Client submits `POST /jobs` with JSON payload.
+2. API Gateway enqueues the request body into SQS.
+3. ECS/Fargate worker polls SQS and loads the payload.
+4. Shared business flow executes in `handler.process_event(...)`.
+5. Worker tracks job state in DynamoDB (`PENDING` -> `RUNNING` -> `SUCCEEDED`/`FAILED`).
 
-AWS services in the path:
+Core AWS services:
 
-- API Gateway (REST API)
-- SQS queue + DLQ
-- ECS/Fargate worker service
-- DynamoDB status table
-- CloudWatch logs/alarms
-- ECR image registry
-- IAM roles/policies
+- API Gateway (ingestion)
+- SQS + DLQ (buffer and failure isolation)
+- ECS/Fargate (worker compute)
+- DynamoDB (job status tracking)
+- ECR (image registry)
+- CloudWatch (logs, alarms, autoscaling signals)
+- IAM (least-privilege runtime/integration access)
 
-## 2) Invocation Contract
+## 2) Payload and Invocation Contract
 
-Endpoint:
+Public invocation endpoint:
 
-- `POST /jobs` via API Gateway
+- `POST /jobs`
 
-Body:
+Payload contract currently enforced by app logic:
 
-- JSON object (worker accepts direct object payload)
+- `customer` is required and non-empty
+- `Org_Ids` is required
+- `Org_Ids` must contain exactly one ID
 
-Example:
+Valid example:
+
+```json
+{"customer":"acme","Org_Ids":[101]}
+```
+
+Invalid example:
 
 ```json
 {"customer":"acme","Org_Ids":[101,102]}
 ```
 
-Response:
+Invocation semantics:
 
-- Async acceptance response (`202` semantics)
+- API response is async acceptance (`202` behavior)
+- final outcome is observed via worker logs and DynamoDB job status
 
-## 3) Processing Model
+## 3) Process Flow (Code-Level Mental Model)
 
-- Worker receives message from SQS.
-- Worker extracts payload from message body.
-- Worker uses shared core logic (`process_event` in `handler.py`).
-- Worker updates DynamoDB status:
-  - `PENDING`
-  - `RUNNING`
-  - `SUCCEEDED` or `FAILED`
+- Queue worker entrypoint: `openfaas-functions/openfaas-aws-migration/sqs_worker.py`
+- Shared validation/business flow: `openfaas-functions/openfaas-aws-migration/handler.py`
+- Job status persistence: `openfaas-functions/openfaas-aws-migration/job_status_store.py`
 
-## 4) Reliability Controls
+End-to-end processing:
 
-- SQS visibility timeout tuned for long jobs.
-- DLQ captures poison/unrecoverable retries.
-- Worker deletes messages after successful processing.
-- Worker deletes malformed non-retryable messages to prevent poison loops.
-- Failed processing leaves message for retry/DLQ handling.
+- `sqs_worker.run()` long-polls SQS
+- `_load_message_payload(...)` extracts payload + `job_id`
+- worker calls `process_event(payload, request_id=job_id)`
+- status transitions are written to DynamoDB
+- message is deleted on success, retried/DLQ on failure
 
-## 5) Scaling and Observability
+## 4) Quick Deployment Steps (Reference Full Guides)
 
-- Worker desired count is configurable.
-- ECS worker autoscaling is driven by SQS backlog alarms.
-- CloudWatch alarms include:
-  - queue backlog thresholds
-  - oldest message age
-  - DLQ message presence
-- Worker logs stream to CloudWatch log group `/ecs/<name_prefix>`.
+Use this as the short path, then follow the detailed commands in `docs/Engineer Guide.md` and operational context in `docs/EngineeringHandoff.md`.
 
-## 6) Code Entry Points
+1. Prepare `terraform/backend.hcl` and `terraform/terraform.tfvars` from examples.
+2. Run Terraform bootstrap/apply for base infrastructure (`terraform init`, `plan`, `apply`).
+3. Build and push worker image to ECR with a unique tag.
+4. Set `image_tag` + desired worker count in `terraform.tfvars`, then apply again.
+5. Smoke test `api_jobs_submit_url` with valid payload and confirm processing in logs/status table.
 
-- Worker runtime: `openfaas-functions/openfaas-aws-migration/sqs_worker.py`
-- Business logic: `openfaas-functions/openfaas-aws-migration/handler.py`
-- Status persistence: `openfaas-functions/openfaas-aws-migration/job_status_store.py`
+## 5) Summary
 
-## 7) Summary
+This system is built for reliable async execution, not synchronous request/response compute. API Gateway is a fast intake layer, SQS is the durable work queue, ECS workers run the real business logic, and DynamoDB records lifecycle state.
 
-The deployment is now async-first and avoids long-lived HTTP request coupling:
+Reliability and operations controls currently configured:
 
-- HTTP request submits work to queue quickly.
-- ECS worker runs long tasks independently of request lifetime.
-- DynamoDB tracks processing state.
-- SQS + DLQ + autoscaling + alarms provide production safety for variable load.
+- **DLQ**: `terraform/sqs.tf` defines a dedicated DLQ (`aws_sqs_queue.jobs_dlq`) and redrive policy on the primary queue.
+- **Visibility timeout controls**: `terraform/sqs.tf` sets queue visibility timeout from `sqs_visibility_timeout_seconds`, and `sqs_worker.py` requires `SQS_VISIBILITY_TIMEOUT` at runtime and fails fast if it is missing or too low for expected job duration.
+- **Retries**: SQS retries are controlled by `sqs_max_receive_count` before DLQ handoff; worker exceptions intentionally leave messages undeleted so SQS can retry, while malformed non-retryable messages are deleted to avoid poison loops.
+- **Autoscaling**: `terraform/autoscaling.tf` configures ECS service desired-count autoscaling with scale-out and scale-in policies bounded by `worker_min_capacity` and `worker_max_capacity`.
+- **CloudWatch alarms**: `terraform/monitoring.tf` and `terraform/autoscaling.tf` create queue health alarms (oldest message age, DLQ presence, backlog thresholds) and wire scaling alarms to autoscaling actions.
+
+Together, these controls make the platform safer for long-running, variable-load workloads and easier to operate in production.
