@@ -1,0 +1,52 @@
+aws_region   = "us-east-1"
+project_name = "openfaas-aws-migration"
+environment  = "dev"
+
+# Set create_vpc = true to let Terraform build a simple VPC.
+create_vpc = false
+
+# Required when create_vpc = false
+vpc_id             = "vpc-0123456789abcdef0"
+private_subnet_ids = ["subnet-0aaa1111bbb2222c3", "subnet-0ddd4444eee5555f6"]
+public_subnet_ids  = ["subnet-01111222233334444", "subnet-05555666677778888"]
+
+worker_desired_count = 1
+worker_min_capacity  = 1
+worker_max_capacity  = 10
+
+cpu               = 512
+memory            = 1024
+image_tag         = "latest"
+log_retention_days = 14
+
+enable_api_gateway     = true
+api_gateway_stage_name = "prod"
+
+sqs_visibility_timeout_seconds     = 3600
+sqs_message_retention_seconds      = 345600
+sqs_receive_wait_time_seconds      = 20
+sqs_max_receive_count              = 5
+queue_scale_out_messages_threshold = 10
+queue_scale_in_messages_threshold  = 0
+queue_alarm_oldest_message_age_seconds = 300
+
+environment_variables = {
+  ENV             = "dev"
+  LOG_LEVEL       = "INFO"
+  REGION          = "us-east-1"
+  REQUEST_TIMEOUT = "60"
+}
+
+# Map env var name -> Secrets Manager ARN (or ARN with json key suffix).
+secrets_manager_arns = {
+  SECOPS_API_TOKEN = "arn:aws:secretsmanager:us-east-1:123456789012:secret:dev/openfaas-aws-migration/secops_api_token-abc123"
+  SOAR_API_TOKEN   = "arn:aws:secretsmanager:us-east-1:123456789012:secret:dev/openfaas-aws-migration/soar_api_token-def456"
+}
+
+enable_task_role_secrets_access = false
+
+tags = {
+  Owner       = "platform-team"
+  CostCenter  = "engineering"
+  Application = "openfaas-aws-migration"
+}

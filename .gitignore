@@ -1,0 +1,29 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.tox/
+.venv/
+venv/
+
+# Terraform local state and sensitive local overrides
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.auto.tfvars
+backend.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# IDE and editor
+.idea/
+.vscode/

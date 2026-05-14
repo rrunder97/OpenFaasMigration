@@ -1,0 +1,27 @@
+# OpenFaaS-style deployment manifest — use for ECS task definition, env vars, and Secrets Manager paths.
+# This is runtime/deployment metadata, not application business data.
+
+function:
+  name: openfaas-aws-migration
+  image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/openfaas-aws-migration:latest
+  port: 8080
+
+environment:
+  ENV: dev
+  LOG_LEVEL: INFO
+  REGION: us-east-1
+  SECOPS_URL: https://secops.example.com
+  SOAR_URL: https://soar.example.com
+  REQUEST_TIMEOUT: "60"
+
+secrets:
+  SECOPS_API_TOKEN: /dev/openfaas-aws-migration/secops_api_token
+  SOAR_API_TOKEN: /dev/openfaas-aws-migration/soar_api_token
+
+resources:
+  cpu: 512
+  memory: 1024
+
+healthcheck:
+  path: /health
+  interval: 30

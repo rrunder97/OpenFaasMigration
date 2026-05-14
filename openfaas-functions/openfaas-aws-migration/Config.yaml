@@ -1,0 +1,21 @@
+# Static application config — safe non-secret values only. Packaged with the container.
+
+application:
+  name: openfaas-aws-migration
+  version: "1.0.0"
+  description: Application config for local runtime behavior
+
+users:
+  - id: 1
+    name: Alice Johnson
+    role: admin
+  - id: 2
+    name: Marcus Lee
+    role: analyst
+  - id: 3
+    name: Priya Patel
+    role: viewer
+
+features:
+  enable_permission_sync: true
+  enable_debug_mode: false
